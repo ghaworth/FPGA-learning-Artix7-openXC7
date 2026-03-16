@@ -1,0 +1,6 @@
+*.json
+*.fasm
+*.frames
+*.bit
+*.vvp
+*.vcd
