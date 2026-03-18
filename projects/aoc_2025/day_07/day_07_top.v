@@ -9,22 +9,18 @@ module Day_07_Top (
   localparam SEND_SYNC2 = 2;
   localparam SEND_RESULT = 3;
   localparam SEND_TIMER = 4;
-
   reg [2:0] current_state = 0;
   wire sending_result = (current_state == SEND_RESULT);
-
   reg [2:0] prev_state = 0;
   wire enter_send_result = (current_state == SEND_RESULT) && (prev_state != SEND_RESULT);
   wire enter_send_timer = (current_state == SEND_TIMER) && (prev_state != SEND_TIMER);
   wire enter_sync1 = (current_state == SEND_SYNC1) && (prev_state != SEND_SYNC1);
   wire enter_sync2 = (current_state == SEND_SYNC2) && (prev_state != SEND_SYNC2);
-
   // muxed signals
   reg [7:0] mux_byte_out;
   reg mux_byte_sent;
   wire result_next = (current_state == SEND_RESULT) ? tx_done : 1'b0;
   wire cc_next = (current_state == SEND_TIMER) ? tx_done : 1'b0;
-
   always @(*) begin
     case (current_state)
       SEND_SYNC1: begin
@@ -45,7 +41,6 @@ module Day_07_Top (
       end
     endcase 
   end
-
   always @(posedge clk) begin
     prev_state <= current_state;
     case (current_state) 
@@ -76,59 +71,48 @@ module Day_07_Top (
       end
     endcase
   end
-
   // core outputs
   wire [10:0] core_result;
   wire core_done;
-
   // timer outputs
   wire [31:0] tmr_result;
   wire tmr_done;
-
   // cycle count outputs
   wire [7:0] cc_byte_out;
   wire cc_sent;
   wire cc_done;
-
   // result outputs
   wire [7:0] result_out;
   wire result_sent;
   wire result_done;
-
   // uart transmitter outputs
   wire tx_active;
   wire tx_done;
-
   // debounced switch
-  wire reset_debounced;
-
+  wire btn_debounced;
   reg button_prev = 0;
   wire button_edge;
-  assign button_edge = reset_debounced && !button_prev;
-
+  assign button_edge = btn_debounced && !button_prev;
+  wire start_core = button_edge && (current_state == IDLE);
   reg core_done_prev = 1;
   wire core_done_edge;
   assign core_done_edge = core_done && !core_done_prev;
-
   always @(posedge clk) begin
-    button_prev <= reset_debounced;
+    button_prev <= btn_debounced;
     core_done_prev <= core_done;
   end  
-
   Debounce_Switch #(.c_DEBOUNCE_LIMIT(1000000)) debounce_reset (
     .i_Clk(clk),
     .i_Switch(btnC),
-    .o_Switch(reset_debounced)
+    .o_Switch(btn_debounced)
   );
-
   Day_07_Core core (
     .clk(clk),
     .result(core_result),
     .done(core_done),
-    .start(button_edge)
+    .start(start_core)
   ); 
-
-uart_tx #(.CLKS_PER_BIT(868)) uart_trans (
+  uart_tx #(.CLKS_PER_BIT(868)) uart_trans (
     .i_Clock    (clk),
     .i_Tx_DV    (mux_byte_sent),
     .i_Tx_Byte  (mux_byte_out),
@@ -136,16 +120,14 @@ uart_tx #(.CLKS_PER_BIT(868)) uart_trans (
     .o_Tx_Serial(RsTx),
     .o_Tx_Done  (tx_done)
   );
-
-Day_07_Timer tmr (
+  Day_07_Timer tmr (
     .clk   (clk),
-    .start (button_edge),
+    .start (start_core),
     .stop  (core_done),
     .result(tmr_result),
     .done  (tmr_done)
   );
-
-Value_To_Bytes #(.VALUE_WIDTH(32)) cycle_count (
+  Value_To_Bytes #(.VALUE_WIDTH(32)) cycle_count (
     .clk             (clk),
     .send_data_now   (enter_send_timer),
     .next_byte_please(cc_next),
@@ -154,8 +136,7 @@ Value_To_Bytes #(.VALUE_WIDTH(32)) cycle_count (
     .byte_sent       (cc_sent),
     .all_bytes_sent  (cc_done)
   );
-
-Value_To_Bytes #(.VALUE_WIDTH(16)) result (
+  Value_To_Bytes #(.VALUE_WIDTH(16)) result (
     .clk             (clk),
     .send_data_now   (enter_send_result),
     .next_byte_please(result_next),
@@ -163,6 +144,5 @@ Value_To_Bytes #(.VALUE_WIDTH(16)) result (
     .byte_out        (result_out),
     .byte_sent       (result_sent),
     .all_bytes_sent  (result_done)
-    );
-
+  );
 endmodule

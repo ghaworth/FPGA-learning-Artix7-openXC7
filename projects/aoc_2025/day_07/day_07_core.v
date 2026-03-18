@@ -23,6 +23,7 @@ module Day_07_Core (
 	reg [2:0] state;
 	reg [6:0] row_count;
 	reg data_valid = 0;
+	reg started = 0;
 
 	// Synchronous read from block RAM
 	reg [15:0] splitter_data;
@@ -41,6 +42,7 @@ module Day_07_Core (
 			done <= 0;
 			data_valid <= 0;
 			state <= LOAD;
+			started <= 1;
 		end else begin
 			case(state)
 			LOAD: begin
@@ -85,8 +87,10 @@ module Day_07_Core (
 			end
 			
 			DONE: begin
-				done <= 1;
-				result <= splits;
+				if (started) begin
+					done <= 1;
+					result <= splits;
+				end
 			end
 		endcase
 			
