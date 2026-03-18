@@ -33,7 +33,7 @@ module uart_tx
   reg [2:0]    r_Bit_Index   = 0;
   reg [7:0]    r_Tx_Data     = 0;
   reg          r_Tx_Done     = 0;
-  reg          r_Tx_Active   = 0;
+  reg          r_Tx_Active   = 0;         
      
   always @(posedge i_Clock)
     begin
