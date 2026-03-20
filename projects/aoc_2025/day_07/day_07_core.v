@@ -2,6 +2,8 @@ module Day_07_Core (
 	input wire clk,
 	input wire start,
 	output reg [10:0] result = 0,
+	output reg [2:0] state,
+    output reg [140:0] active = 141'b0,
 	output reg done = 0
 );
 	// Block RAM for splitter data
@@ -15,12 +17,10 @@ module Day_07_Core (
 
 	reg [9:0] ram_addr;
 	reg [3:0] words_read;
-	reg [140:0] active = 141'b0;
 	reg [140:0] bitmask;
 	reg [140:0] hits;
 	reg [7:0] bitshifts = 0;
 	reg [10:0] splits;
-	reg [2:0] state;
 	reg [6:0] row_count;
 	reg data_valid = 0;
 	reg started = 0;
