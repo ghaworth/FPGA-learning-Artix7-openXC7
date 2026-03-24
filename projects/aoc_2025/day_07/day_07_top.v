@@ -1,8 +1,14 @@
 module Day_07_Top (
   input clk,
   input btnC,
-  output RsTx
+  output RsTx, 
+  output [3:0] vgaRed,
+  output [3:0] vgaGreen,
+  output [3:0] vgaBlue,
+  output Hsync,
+  output Vsync
 );
+
   localparam IDLE = 0;
   localparam SEND_SYNC1 = 1;
   localparam SEND_SYNC2 = 2;
@@ -19,6 +25,29 @@ module Day_07_Top (
   reg [7:0] mux_byte_out;
   reg mux_byte_sent;
   wire result_next = (current_state == SEND_RESULT) ? tx_done_edge : 1'b0;
+
+  // block RAM for VGA framebuffer
+  reg [140:0] framebuffer [0:69];
+
+  wire [7:0] fb_col = x_coord[9:2];  // divide by 4
+  wire [6:0] fb_row = y_coord[9:2];  // divide by 4
+  
+  // write port (caputure module)
+  always @(posedge clk) begin
+    if(capture_write_en) 
+      framebuffer[capture_address] <= capture_data;
+  end
+
+  // framebuffer read port (for VGA)
+  reg [140:0] fb_row_data;
+  always @(posedge clk)
+      fb_row_data <= framebuffer[fb_row];
+
+  wire fb_pixel = (fb_col < 141) ? fb_row_data[fb_col] : 1'b0;
+
+  assign vgaRed   = 4'b0000;
+  assign vgaGreen  = (visible && fb_pixel) ? 4'b1111 : 4'b0000;
+  assign vgaBlue   = 4'b0000;
 
   always @(*) begin
     case (current_state)
@@ -104,11 +133,16 @@ module Day_07_Top (
     .o_Switch(btn_debounced)
   );
 
+  wire [2:0] core_state; 
+  wire [140:0] core_active;
+  
   Day_07_Core core (
     .clk(clk),
     .result(core_result),
     .done(core_done),
-    .start(start_core)
+    .start(start_core), 
+    .state(core_state),
+    .active(core_active)
   );
 
   uart_tx #(.CLKS_PER_BIT(868)) uart_trans (
@@ -147,4 +181,18 @@ module Day_07_Top (
     .byte_sent(timer_sent),
     .all_bytes_sent(timer_done)
   );
+
+  wire capture_write_en;
+  wire [6:0] capture_address;
+  wire [140:0] capture_data; 
+
+  Day_07_Capture capture (
+    .clk(clk),
+    .state(core_state),
+    .active(core_active), 
+    .address(capture_address),    
+    .data(capture_data),
+    .write_en(capture_write_en)
+    );
+
 endmodule
