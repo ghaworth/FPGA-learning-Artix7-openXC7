@@ -29,8 +29,8 @@ module Day_07_Top (
   // block RAM for VGA framebuffer
   reg [140:0] framebuffer [0:69];
 
-  wire [7:0] fb_col = x_coord[9:2];  // divide by 4
-  wire [6:0] fb_row = y_coord[9:2];  // divide by 4
+  wire [7:0] fb_col = vga_x[9:2];  // divide by 4
+  wire [6:0] fb_row = vga_y[9:2];  // divide by 4
   
   // write port (caputure module)
   always @(posedge clk) begin
@@ -46,7 +46,7 @@ module Day_07_Top (
   wire fb_pixel = (fb_col < 141) ? fb_row_data[fb_col] : 1'b0;
 
   assign vgaRed   = 4'b0000;
-  assign vgaGreen  = (visible && fb_pixel) ? 4'b1111 : 4'b0000;
+  assign vgaGreen  = (vga_visible && fb_pixel) ? 4'b1111 : 4'b0000;
   assign vgaBlue   = 4'b0000;
 
   always @(*) begin
@@ -193,6 +193,19 @@ module Day_07_Top (
     .address(capture_address),    
     .data(capture_data),
     .write_en(capture_write_en)
+    );
+
+  wire [9:0] vga_x;
+  wire [9:0] vga_y;
+  wire vga_visible;
+
+  VGA_Display vga (
+    .clk(clk), 
+    .x_coord(vga_x), 
+    .y_coord(vga_y), 
+    .visible(vga_visible), 
+    .h_sync(Hsync),
+    .v_sync(Vsync)
     );
 
 endmodule
