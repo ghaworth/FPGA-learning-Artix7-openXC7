@@ -1,9 +1,9 @@
 module VGA_Display 
     (
      input wire clk,
-     output reg [9:0] x_coord, 
-     output reg [9:0] y_coord,
-     output reg visible, 
+     output wire [9:0] x_coord, 
+     output wire [9:0] y_coord,
+     output wire visible, 
      output wire h_sync, 
      output wire v_sync
      );
@@ -13,6 +13,12 @@ module VGA_Display
     reg [9:0] v_count = 0;
 
     wire pixel_tick = (pixel_counter == 0);
+
+    assign h_sync = (h_count >= 656 && h_count <= 751) ? 1'b0 : 1'b1;
+    assign v_sync = (v_count >= 490 && v_count <= 491) ? 1'b0 : 1'b1;
+    assign visible = (h_count <= 639 && v_count <= 479) ? 1'b1 : 1'b0; 
+    assign x_coord = h_count;
+    assign y_coord = v_count;
 
     always @(posedge clk) begin
         pixel_counter <= pixel_counter + 1;
@@ -28,3 +34,4 @@ module VGA_Display
             end
         end
     end 
+endmodule
