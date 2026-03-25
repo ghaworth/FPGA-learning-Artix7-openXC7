@@ -8,8 +8,10 @@ CONSTRAINTS = ../../../constraints/basys3.xdc
 SRCS = day_07_top.v \
        day_07_core.v \
        day_07_timer.v \
+       day_07_capture.v \
        $(LIB_IO)/debounce_switch.v \
        $(LIB_IO)/uart_tx.v \
+       $(LIB_IO)/vga_display.v \
        $(LIB_IO)/value_to_bytes.v
 
 .PHONY: all clean program sim

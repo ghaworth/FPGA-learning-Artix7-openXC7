@@ -23,3 +23,5 @@ module Day_07_Capture (
     		write_en <= 0;
     	end 
     end
+
+endmodule
