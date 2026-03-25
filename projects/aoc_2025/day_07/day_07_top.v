@@ -28,6 +28,11 @@ module Day_07_Top (
 
   // block RAM for VGA framebuffer
   reg [140:0] framebuffer [0:69];
+  integer i;
+  initial begin
+    for (i = 0; i < 70; i = i + 1)
+      framebuffer[i] = 141'b0;
+  end
 
   wire [7:0] fb_col = vga_x[9:2];  // divide by 4
   wire [6:0] fb_row = vga_y[9:2];  // divide by 4
@@ -43,7 +48,7 @@ module Day_07_Top (
   always @(posedge clk)
       fb_row_data <= framebuffer[fb_row];
 
-  wire fb_pixel = (fb_col < 141) ? fb_row_data[fb_col] : 1'b0;
+  wire fb_pixel = (fb_col < 141 && fb_row < 70) ? fb_row_data[fb_col] : 1'b0;
 
   assign vgaRed   = 4'b0000;
   assign vgaGreen  = (vga_visible && fb_pixel) ? 4'b1111 : 4'b0000;
@@ -188,6 +193,7 @@ module Day_07_Top (
 
   Day_07_Capture capture (
     .clk(clk),
+    .start(start_core),
     .state(core_state),
     .active(core_active), 
     .address(capture_address),    

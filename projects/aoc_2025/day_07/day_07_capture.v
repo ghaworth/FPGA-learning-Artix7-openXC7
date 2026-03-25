@@ -1,5 +1,6 @@
 module Day_07_Capture (
 	input wire clk,
+	input wire start, 
 	input wire [2:0] state,
     input wire [140:0] active,
 	output reg [6:0] address,
@@ -13,15 +14,15 @@ module Day_07_Capture (
 
 	always @(posedge clk) begin
     prev_state <= state;
-    address <= row_count;
-    	if (row_done) begin
-    		data <= active;
-    		address <= row_count;
-    		row_count <= row_count + 1;
-    		write_en <= 1;
-    	end else begin
-    		write_en <= 0;
-    	end 
-    end
+    write_en <= 0;
+    if (start) begin
+    	row_count <= 0;
+    end else if (row_done) begin
+		data <= active;
+		address <= row_count;
+		row_count <= row_count + 1;
+		write_en <= 1;
+	end 
+end
 
 endmodule
