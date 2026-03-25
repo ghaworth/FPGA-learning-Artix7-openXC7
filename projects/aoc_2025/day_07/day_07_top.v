@@ -26,6 +26,25 @@ module Day_07_Top (
   reg mux_byte_sent;
   wire result_next = (current_state == SEND_RESULT) ? tx_done_edge : 1'b0;
 
+  reg [140:0] splitter_map [0:69];
+  initial $readmemh("splitter_map.hex", splitter_map);
+
+  reg [6:0] playback_row = 0;
+  reg [26:0] playback_counter = 0;
+  always @(posedge clk) begin
+      if (start_core) begin
+        playback_row <= 0;
+        playback_counter <= 0;
+      end else begin
+          playback_counter <= playback_counter + 1;
+          if (playback_counter == 100_000_000) begin // 1 second @ 100MHz
+              playback_counter <= 0;
+              if (playback_row < 69)
+                  playback_row <= playback_row + 1;
+          end 
+      end
+  end 
+
   // block RAM for VGA framebuffer
   reg [140:0] framebuffer [0:69];
   integer i;
@@ -48,10 +67,16 @@ module Day_07_Top (
   always @(posedge clk)
       fb_row_data <= framebuffer[fb_row];
 
-  wire fb_pixel = (fb_col < 141 && fb_row < 70) ? fb_row_data[fb_col] : 1'b0;
+  reg [140:0] splitter_row_data;
+  always @(posedge clk)
+      splitter_row_data <= splitter_map[fb_row];
 
-  assign vgaRed   = 4'b0000;
-  assign vgaGreen  = (vga_visible && fb_pixel) ? 4'b1111 : 4'b0000;
+  wire is_splitter = splitter_row_data[fb_col];
+  wire is_beam = (fb_row <= playback_row) ? fb_row_data[fb_col] : 1'b0;
+  wire is_start = (fb_row == 0 && fb_col == 70);
+
+  assign vgaRed   = (vga_visible && fb_col < 141 && fb_row < 70 && is_beam) ? 4'b1111 : 4'b0000;
+  assign vgaGreen  = (vga_visible && fb_col < 141 && fb_row < 70 && (is_splitter || is_start)) ? 4'b1111 : 4'b0000;
   assign vgaBlue   = 4'b0000;
 
   always @(*) begin
