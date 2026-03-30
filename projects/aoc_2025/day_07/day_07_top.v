@@ -6,7 +6,10 @@ module Day_07_Top (
   output [3:0] vgaGreen,
   output [3:0] vgaBlue,
   output Hsync,
-  output Vsync
+  output Vsync, 
+  output [6:0] seg, 
+  output dp, 
+  output [3:0] an 
 );
 
   localparam IDLE = 0;
@@ -237,6 +240,27 @@ module Day_07_Top (
     .visible(vga_visible), 
     .h_sync(Hsync),
     .v_sync(Vsync)
+    );
+
+  wire [63:0] bcd_num; 
+
+  bin_to_bcd b2b (
+    .clk(clk), 
+    .start(core_done_edge), 
+    .bin_num(core_result),
+    .done(),  
+    .bcd_num(bcd_num)
+    );
+
+  seg7_mux s7m (
+    .clk(clk), 
+    .digit0(bcd_num[3:0]), 
+    .digit1(bcd_num[7:4]), 
+    .digit2(bcd_num[11:8]), 
+    .digit3(bcd_num[15:12]), 
+    .seg(seg), 
+    .dp(dp), 
+    .an(an)
     );
 
 endmodule

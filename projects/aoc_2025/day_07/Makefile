@@ -12,6 +12,8 @@ SRCS = day_07_top.v \
        $(LIB_IO)/debounce_switch.v \
        $(LIB_IO)/uart_tx.v \
        $(LIB_IO)/vga_display.v \
+       $(LIB_IO)/seg7_mux.v \
+       $(LIB_IO)/bin_to_bcd.v \
        $(LIB_IO)/value_to_bytes.v
 
 .PHONY: all clean program sim
