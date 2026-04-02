@@ -12,6 +12,7 @@ module Day_07_Part2_Core (
 	localparam DONE = 0;
 	localparam LOAD = 1;
 	localparam PROCESS = 2;
+	localparam SUM = 3;
 
 	reg [69:0] count [0:140];
 	reg [9:0] ram_addr;
@@ -23,6 +24,7 @@ module Day_07_Part2_Core (
 	reg [69:0] accumulator;
 	integer j;
 	integer k;
+	reg [7:0] sum_index;
 
 	// Synchronous read from block RAM
 	reg [15:0] splitter_data;
@@ -40,6 +42,7 @@ module Day_07_Part2_Core (
 		data_valid <= 0;
 		state <= LOAD;
 		started <= 1;
+		sum_index <= 0;
 		for (j = 0; j <= 140; j = j + 1)
 			count[j] <= 0;
 		count [70] <= 1;
@@ -67,8 +70,33 @@ module Day_07_Part2_Core (
  				count[k] <= (bitmask[k] ? 0:count[k]) + (bitmask[k-1] ? count[k-1]:0) + (bitmask[k+1] ? count[k+1]:0);
  			count[140] <= (bitmask[140] ? 0:count[140]) + (bitmask[139] ? count[139]:0);
  			accumulator <= accumulator + (bitmask[0] ? count[0]:0) + (bitmask[140] ? count[140]:0);
-			end
+ 			
+ 			if (row_count < 69) begin
+ 				// loop back to load next row
+ 				row_count <= row_count + 1;
+				state <= LOAD;
+				words_read <= 0;
+	 			data_valid <= 0;
+	 			end else begin
+	 				row_count <= 0;
+	 				state <= SUM;
+	 			end  
+			end 
+
+		SUM: begin 
+			accumulator <= accumulator + count[sum_index];
+			sum_index <= sum_index + 1;
+			if (sum_index == 140)
+				state <= DONE;					
+			end 
+
+		DONE: begin
+			if (started) begin 
+				done <= 1;
+				result <= accumulator;
+			end 
+		end 
 		endcase
 	end 
-
+	end
 endmodule
