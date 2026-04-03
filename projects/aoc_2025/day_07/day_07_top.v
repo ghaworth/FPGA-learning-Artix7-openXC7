@@ -117,7 +117,7 @@ module Day_07_Top (
     prev_state <= current_state;
     case (current_state)
       IDLE: begin
-        if (either_done_edge)
+        if (any_done_edge)
           current_state <= SEND_SYNC1;
       end
       SEND_SYNC1: begin
@@ -168,16 +168,24 @@ module Day_07_Top (
   wire start_core = btnL_edge && (current_state == IDLE);
   wire start_core2 = btnR_edge && (current_state == IDLE);
 
-  wire either_done = core_done | core2_done;
+/*  wire either_done = core_done | core2_done;
   reg either_done_prev = 1;
-  wire either_done_edge = either_done && !either_done_prev;
+  wire either_done_edge = either_done && !either_done_prev;*/
+
+  reg core_done_prev = 1;
+  reg core2_done_prev = 1;
+  wire core_done_edge = core_done && !core_done_prev;
+  wire core2_done_edge = core2_done && !core2_done_prev;
+  wire any_done_edge = core_done_edge | core2_done_edge;
 
   always @(posedge clk) begin
     btnL_prev <= btnL_debounced;
     btnR_prev <= btnR_debounced;
     if (btnL_edge) active_part <= 0;
     if (btnR_edge) active_part <= 1;
-    either_done_prev <= either_done;
+    //either_done_prev <= either_done;
+    core_done_prev <= core_done;
+    core2_done_prev <= core2_done;
   end
 
   Debounce_Switch #(.c_DEBOUNCE_LIMIT(1000000)) debounce_reset_L (
@@ -281,7 +289,7 @@ module Day_07_Top (
   
   bin_to_bcd b2b (
     .clk(clk), 
-    .start(either_done_edge), 
+    .start(any_done_edge), 
     .bin_num(display_result),
     .done(),  
     .bcd_num(bcd_num)
