@@ -7,6 +7,7 @@ CONSTRAINTS = ../../../constraints/basys3.xdc
 
 SRCS = day_07_top.v \
        day_07_core.v \
+       day_07_part2_core.v \
        day_07_timer.v \
        day_07_capture.v \
        $(LIB_IO)/debounce_switch.v \

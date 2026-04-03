@@ -1,6 +1,7 @@
 module Day_07_Top (
   input clk,
-  input btnC,
+  input btnL,
+  input btnR,
   output RsTx, 
   output [3:0] vgaRed,
   output [3:0] vgaGreen,
@@ -9,8 +10,12 @@ module Day_07_Top (
   output Vsync, 
   output [6:0] seg, 
   output dp, 
-  output [3:0] an 
+  output [3:0] an, 
+  output [2:1] led 
 );
+
+  assign led[1] = btnL_debounced;
+  assign led[2] = btnR_debounced;
 
   localparam IDLE = 0;
   localparam SEND_SYNC1 = 1;
@@ -19,6 +24,7 @@ module Day_07_Top (
   localparam SEND_TIMER = 4;
   reg [2:0] current_state = 0;
   reg [2:0] prev_state = 0;
+  reg active_part = 0;
   wire enter_send_result = (current_state == SEND_RESULT) && (prev_state != SEND_RESULT);
   wire enter_send_timer = (current_state == SEND_TIMER) && (prev_state != SEND_TIMER);
   wire cc_next = (current_state == SEND_TIMER) ? tx_done_edge : 1'b0;
@@ -111,7 +117,7 @@ module Day_07_Top (
     prev_state <= current_state;
     case (current_state)
       IDLE: begin
-        if (core_done_edge)
+        if (either_done_edge)
           current_state <= SEND_SYNC1;
       end
       SEND_SYNC1: begin
@@ -134,7 +140,9 @@ module Day_07_Top (
   end
 
   wire [10:0] core_result;
+  wire [69:0] core2_result;
   wire core_done;
+  wire core2_done;
   wire [7:0] result_out;
   wire result_sent;
   wire result_done;
@@ -146,24 +154,42 @@ module Day_07_Top (
   wire tx_done;
   reg  tx_done_prev = 0;
   wire tx_done_edge = tx_done && !tx_done_prev;
+  
   always @(posedge clk)
       tx_done_prev <= tx_done;  
 
-  wire btn_debounced;
-  reg button_prev = 0;
-  wire button_edge = btn_debounced && !button_prev;
-  wire start_core = button_edge && (current_state == IDLE);
-  reg core_done_prev = 1;
-  wire core_done_edge = core_done && !core_done_prev;
+  wire btnL_debounced;
+  wire btnR_debounced;
+  reg btnL_prev = 0;
+  reg btnR_prev = 0;
+  wire btnL_edge = btnL_debounced && !btnL_prev;
+  wire btnR_edge = btnR_debounced && !btnR_prev;
+
+  wire start_core = btnL_edge && (current_state == IDLE);
+  wire start_core2 = btnR_edge && (current_state == IDLE);
+
+  wire either_done = core_done | core2_done;
+  reg either_done_prev = 1;
+  wire either_done_edge = either_done && !either_done_prev;
+
   always @(posedge clk) begin
-    button_prev <= btn_debounced;
-    core_done_prev <= core_done;
+    btnL_prev <= btnL_debounced;
+    btnR_prev <= btnR_debounced;
+    if (btnL_edge) active_part <= 0;
+    if (btnR_edge) active_part <= 1;
+    either_done_prev <= either_done;
   end
 
-  Debounce_Switch #(.c_DEBOUNCE_LIMIT(1000000)) debounce_reset (
+  Debounce_Switch #(.c_DEBOUNCE_LIMIT(1000000)) debounce_reset_L (
     .i_Clk(clk),
-    .i_Switch(btnC),
-    .o_Switch(btn_debounced)
+    .i_Switch(btnL),
+    .o_Switch(btnL_debounced)
+  );
+
+  Debounce_Switch #(.c_DEBOUNCE_LIMIT(1000000)) debounce_reset_R (
+    .i_Clk(clk),
+    .i_Switch(btnR),
+    .o_Switch(btnR_debounced)
   );
 
   wire [2:0] core_state; 
@@ -171,11 +197,19 @@ module Day_07_Top (
   
   Day_07_Core core (
     .clk(clk),
+    .start(start_core),
     .result(core_result),
-    .done(core_done),
-    .start(start_core), 
+    .done(core_done), 
     .state(core_state),
     .active(core_active)
+  );
+
+  Day_07_Part2_Core p2core (
+    .clk(clk), 
+    .start(start_core2), 
+    .result(core2_result), 
+    .done(core2_done), 
+    .state()
   );
 
   uart_tx #(.CLKS_PER_BIT(868)) uart_trans (
@@ -243,11 +277,12 @@ module Day_07_Top (
     );
 
   wire [63:0] bcd_num; 
-
+  wire [49:0] display_result = active_part ? core2_result[49:0] : core_result;
+  
   bin_to_bcd b2b (
     .clk(clk), 
-    .start(core_done_edge), 
-    .bin_num(core_result),
+    .start(either_done_edge), 
+    .bin_num(display_result),
     .done(),  
     .bcd_num(bcd_num)
     );
