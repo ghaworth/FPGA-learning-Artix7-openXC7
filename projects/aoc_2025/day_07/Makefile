@@ -25,7 +25,7 @@ day_07.json: $(SRCS)
 	yosys -p "synth_xilinx -flatten -abc9 -arch xc7 -top Day_07_Top; write_json day_07.json" $(SRCS)
 
 day_07.fasm: day_07.json
-	nextpnr-xilinx --chipdb $(CHIPDB) --xdc $(CONSTRAINTS) --json day_07.json --fasm day_07.fasm
+	nextpnr-xilinx --chipdb $(CHIPDB) --xdc $(CONSTRAINTS) --json day_07.json --fasm day_07.fasm --freq 100
 
 day_07.frames: day_07.fasm
 	fasm2frames --part $(PART) --db-root $(DB_ROOT) day_07.fasm > day_07.frames

@@ -25,6 +25,11 @@ module Day_07_Part2_Core (
 	integer j;
 	integer k;
 	reg [7:0] sum_index;
+	reg [7:0] pos = 0;
+	reg [69:0] prev;
+	reg [69:0] left;
+	reg [69:0] self;
+	reg [69:0] right;
 
 	// Synchronous read from block RAM
 	reg [15:0] splitter_data;
@@ -58,6 +63,7 @@ module Day_07_Part2_Core (
 				words_read <= words_read + 1;
 				ram_addr <= ram_addr + 1;
 				data_valid <= 0;
+				pos <= 0;
 				if (words_read >= 8) begin
 					state <= PROCESS;
 				end
@@ -65,23 +71,33 @@ module Day_07_Part2_Core (
 		end 
 
 		PROCESS: begin
-			count[0] <= (bitmask[0] ? 0:count[0]) + (bitmask[1] ? count[1]:0);
- 			for (k = 1; k <= 139; k = k + 1)
- 				count[k] <= (bitmask[k] ? 0:count[k]) + (bitmask[k-1] ? count[k-1]:0) + (bitmask[k+1] ? count[k+1]:0);
- 			count[140] <= (bitmask[140] ? 0:count[140]) + (bitmask[139] ? count[139]:0);
- 			accumulator <= accumulator + (bitmask[0] ? count[0]:0) + (bitmask[140] ? count[140]:0);
- 			
- 			if (row_count < 69) begin
- 				// loop back to load next row
- 				row_count <= row_count + 1;
-				state <= LOAD;
-				words_read <= 0;
-	 			data_valid <= 0;
-	 			end else begin
-	 				row_count <= 0;
-	 				state <= SUM;
-	 			end  
-			end 
+			left = (pos > 0 && bitmask[pos-1]) ? prev : 70'd0;
+			self = bitmask[pos] ? 70'd0 : count[pos];
+			right = (pos < 140 && bitmask[pos+1]) ? count[pos+1] : 70'd0;
+
+			if (pos <= 140) begin
+			prev <= count[pos];
+			count[pos] <= self + left + right;
+			pos <= pos + 1;
+				if (pos == 0 && bitmask[0]) 
+					accumulator <= accumulator + count[0];
+				if (pos == 140 && bitmask[140])
+					accumulator <= accumulator + count[140];
+ 			end else begin
+	 			if (row_count < 69) begin
+	 				// loop back to load next row
+	 				row_count <= row_count + 1;
+					state <= LOAD;
+					words_read <= 0;
+		 			data_valid <= 0;
+		 			end else begin
+		 				row_count <= 0;
+		 				state <= SUM;
+		 				pos <= 0;
+		 			end  
+				end 
+ 			end 
+
 
 		SUM: begin 
 			accumulator <= accumulator + count[sum_index];
