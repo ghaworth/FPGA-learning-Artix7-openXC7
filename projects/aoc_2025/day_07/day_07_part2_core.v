@@ -124,7 +124,6 @@ module Day_07_Part2_Core (
 		 				pos <= 0;
 		 			end  
 				end 
- 			end 
 		end 
 
 		SUM: begin
