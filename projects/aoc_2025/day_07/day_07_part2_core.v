@@ -16,6 +16,9 @@ module Day_07_Part2_Core (
 
 	always @(posedge clk) begin
 	    count_rdata_a <= count[count_addr_a];
+	end
+
+	always @(posedge clk) begin
 	    count_rdata_b <= count[count_addr_b];
 	end
 
@@ -27,6 +30,7 @@ module Day_07_Part2_Core (
 	localparam SUM = 5;
 	localparam WAIT = 6;
 
+	(* ram_style = "distributed" *)
 	reg [69:0] count [0:140];
 	reg [9:0] ram_addr;
 	reg [3:0] words_read;
