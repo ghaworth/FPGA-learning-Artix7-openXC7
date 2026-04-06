@@ -25,6 +25,7 @@ module Day_07_Part2_Core (
 	localparam FETCH = 3;
 	localparam COMPUTE = 4;
 	localparam SUM = 5;
+	localparam WAIT = 6;
 
 	reg [69:0] count [0:140];
 	reg [9:0] ram_addr;
@@ -34,15 +35,13 @@ module Day_07_Part2_Core (
 	reg data_valid = 0;
 	reg started = 0;
 	reg [69:0] accumulator;
-	integer j;
-	integer k;
 	reg [7:0] sum_index;
 	reg [7:0] pos = 0;
 	reg [69:0] prev;
 	reg [69:0] left;
 	reg [69:0] self;
 	reg [69:0] right;
-	reg phase = 0;
+	reg [1:0] phase = 0;
 
 	// Synchronous read from block RAM
 	reg [15:0] splitter_data;
@@ -63,6 +62,8 @@ module Day_07_Part2_Core (
 		sum_index <= 0;
 		pos <= 0;
 		phase <= 0;
+		count_addr_a <= 0;
+		count_addr_b <= 0;
 
 	end else begin
 		case(state)
@@ -94,6 +95,10 @@ module Day_07_Part2_Core (
 		FETCH: begin  // set BRAM addresses 
 			count_addr_a <= pos;
 			count_addr_b <= pos+1;
+			state <= WAIT;
+		end 
+
+		WAIT: begin 
 			state <= COMPUTE;
 		end 
 
@@ -127,10 +132,12 @@ module Day_07_Part2_Core (
 		end 
 
 		SUM: begin
-			if (!phase) begin
+			if (phase == 0) begin
 				count_addr_a <= sum_index;
 				phase <= 1;
-			end	else begin
+			end	else if (phase == 1) begin
+				phase <= 2;
+			end else begin
 				accumulator <= accumulator + count_rdata_a;		
 				sum_index <= sum_index + 1;
 				phase <= 0;
