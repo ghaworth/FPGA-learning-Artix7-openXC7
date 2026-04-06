@@ -4,3 +4,4 @@
 *.bit
 *.vvp
 *.vcd
+build.log
