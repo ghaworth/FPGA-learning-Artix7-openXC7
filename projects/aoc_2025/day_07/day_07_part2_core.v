@@ -9,10 +9,22 @@ module Day_07_Part2_Core (
 	reg [15:0] splitters [0:629];
 	initial $readmemh("splitters.hex", splitters);
 
+	reg [7:0] count_addr_a;
+	reg [7:0] count_addr_b;
+	reg [69:0] count_rdata_a;
+	reg [69:0] count_rdata_b;
+
+	always @(posedge clk) begin
+	    count_rdata_a <= count[count_addr_a];
+	    count_rdata_b <= count[count_addr_b];
+	end
+
 	localparam DONE = 0;
-	localparam LOAD = 1;
-	localparam PROCESS = 2;
-	localparam SUM = 3;
+	localparam INIT = 1;
+	localparam LOAD = 2;
+	localparam FETCH = 3;
+	localparam COMPUTE = 4;
+	localparam SUM = 5;
 
 	reg [69:0] count [0:140];
 	reg [9:0] ram_addr;
@@ -30,6 +42,7 @@ module Day_07_Part2_Core (
 	reg [69:0] left;
 	reg [69:0] self;
 	reg [69:0] right;
+	reg phase = 0;
 
 	// Synchronous read from block RAM
 	reg [15:0] splitter_data;
@@ -45,15 +58,23 @@ module Day_07_Part2_Core (
 		accumulator <= 0;
 		done <= 0;
 		data_valid <= 0;
-		state <= LOAD;
+		state <= INIT;
 		started <= 1;
 		sum_index <= 0;
-		for (j = 0; j <= 140; j = j + 1)
-			count[j] <= 0;
-		count [70] <= 1;
+		pos <= 0;
+		phase <= 0;
 
 	end else begin
 		case(state)
+		INIT: begin
+			count[pos] <= (pos == 70) ? 70'd1 : 70'd0;
+			pos <= pos + 1;
+			if (pos == 140) begin
+				pos <= 0;
+				state <= LOAD;
+			end
+		end	
+
 		LOAD: begin
 			if (!data_valid) begin
 				// wait one cycle for RAM read
@@ -65,24 +86,31 @@ module Day_07_Part2_Core (
 				data_valid <= 0;
 				pos <= 0;
 				if (words_read >= 8) begin
-					state <= PROCESS;
+					state <= FETCH;
 				end
 			end
 		end 
 
-		PROCESS: begin
-			left = (pos > 0 && bitmask[pos-1]) ? prev : 70'd0;
-			self = bitmask[pos] ? 70'd0 : count[pos];
-			right = (pos < 140 && bitmask[pos+1]) ? count[pos+1] : 70'd0;
+		FETCH: begin  // set BRAM addresses 
+			count_addr_a <= pos;
+			count_addr_b <= pos+1;
+			state <= COMPUTE;
+		end 
 
+		COMPUTE: begin
+			left = (pos > 0 && bitmask[pos-1]) ? prev : 70'd0;
+			self = bitmask[pos] ? 70'd0 : count_rdata_a;
+			right = (pos < 140 && bitmask[pos+1]) ? count_rdata_b : 70'd0;
+			
 			if (pos <= 140) begin
-			prev <= count[pos];
+			prev <= count_rdata_a;
 			count[pos] <= self + left + right;
 			pos <= pos + 1;
 				if (pos == 0 && bitmask[0]) 
-					accumulator <= accumulator + count[0];
+					accumulator <= accumulator + count_rdata_a;
 				if (pos == 140 && bitmask[140])
-					accumulator <= accumulator + count[140];
+					accumulator <= accumulator + count_rdata_a;
+			state <= FETCH;
  			end else begin
 	 			if (row_count < 69) begin
 	 				// loop back to load next row
@@ -97,14 +125,20 @@ module Day_07_Part2_Core (
 		 			end  
 				end 
  			end 
+		end 
 
-
-		SUM: begin 
-			accumulator <= accumulator + count[sum_index];
-			sum_index <= sum_index + 1;
-			if (sum_index == 140)
-				state <= DONE;					
+		SUM: begin
+			if (!phase) begin
+				count_addr_a <= sum_index;
+				phase <= 1;
+			end	else begin
+				accumulator <= accumulator + count_rdata_a;		
+				sum_index <= sum_index + 1;
+				phase <= 0;
+				if (sum_index == 140)
+					state <= DONE;					
 			end 
+		end 
 
 		DONE: begin
 			if (started) begin 
