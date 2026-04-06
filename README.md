@@ -1,123 +1,183 @@
-# FPGA Learning: Artix-7 + openXC7
+# FPGA Learning — Artix-7 (openXC7)
 
-Hardware implementations on the Digilent Basys 3 (Xilinx Artix-7 XC7A35T) using the open-source openXC7 toolchain. No Vivado.
+FPGA projects targeting the Digilent Basys 3 (Xilinx Artix-7 XC7A35T) using a fully open-source toolchain: Yosys, nextpnr-xilinx, Project X-Ray, and openFPGALoader.
 
-This repo is a companion to [FPGA-learning-iCE40-Yosys](https://github.com/ghaworth/FPGA-learning-iCE40-Yosys), which targets the Nandland Go Board (Lattice iCE40 HX1K). Designs that outgrow the iCE40's 1,280 logic cells move here — the Artix-7 provides 33,280 LCs with room for wider datapaths, UART output, and VGA visualisation.
-
-## Structure
-
-```
-FPGA-learning-Artix7-openXC7/
-├── lib/                           # Reusable component library (shared with iCE40 repo)
-│   ├── io/
-│   │   ├── debounce_switch.v      # Switch debouncing (parameterised for clock speed)
-│   │   ├── uart_tx.v              # UART transmitter (Nandland, widened for 100MHz)
-│   │   ├── uart_rx.v              # UART receiver (Nandland)
-│   │   ├── vga_display.v          # VGA 640x480 timing generator
-│   │   ├── value_to_bytes.v       # Parameterised value-to-byte serialiser
-│   │   ├── mac_uart.py            # Python UART receiver script
-│   │   ├── bin_to_bcd.v           # Binary to BCD (double-dabble)
-│   │   └── scroll_display.v       # Scrolling 7-segment display
-│   └── converters/
-│       └── Binary_To_7Segment.v   # BCD to 7-segment encoding
-├── projects/
-│   ├── blinky/                    # Initial board test
-│   └── aoc_2025/
-│       └── day_07/
-│           ├── day_07_top.v       # Top module: core + timer + UART + VGA pipeline
-│           ├── day_07_core.v      # Beam splitting algorithm (part 1)
-│           ├── day_07_timer.v     # Cycle counter
-│           ├── day_07_capture.v   # Beam state capture for VGA framebuffer
-│           ├── day_07_core_tb.v   # Self-checking testbench
-│           ├── splitters.hex      # Block RAM data (packed 16-bit words)
-│           ├── splitter_map.hex   # Splitter positions (141-bit rows for VGA)
-│           ├── input.txt          # AoC puzzle input
-│           ├── mac_uart.py        # UART receiver (configured for Linux)
-│           ├── gen_input.py       # Input parser — generates both hex files
-│           └── Makefile           # openXC7 build + simulation
-├── constraints/
-│   └── basys3.xdc                 # Full Basys 3 master constraints
-├── .gitignore
-└── README.md
-```
+Built on Ubuntu 24.04 ARM64 (Parallels, Mac Studio M4).
 
 ## Advent of Code 2025
 
-### Day 7: Beam Splitting (Part 1)
+Hardware implementations of selected AoC 2025 challenges in Verilog — inspired by Jane Street's Advent of FPGA.
 
-Simulates a beam propagating through a 141-wide grid of splitters across 70 rows. A tachyon beam enters at the centre and splits each time it hits a `^` splitter, with new beams continuing left and right.
+Challenges are selected for genuine hardware suitability (fixed data flow, bit manipulation, parallel operations, state machines). Input data is pre-computed offline into Verilog constants or hex files.
 
-- **Result**: 1672 splits (verified against simulation and AoC accepted answer)
-- **Execution time**: 11,201 clock cycles = 0.112ms at 100MHz
-- **UART output**: Sync header (`0xAA 0x55`), 2-byte result (little-endian), 4-byte cycle count
-- **VGA output**: Real-time visualisation of beam propagation on 640×480 display — green splitters, red beam, animated playback at 1 row per second
+### Day 7 — Beam Splitting Simulation
 
-**Architecture**: Button press triggers the core computation and cycle counter simultaneously. The capture module snapshots the 141-bit beam state after each row into a dual-port framebuffer. On completion, a state machine sequences sync bytes, result bytes, and timer bytes through a muxed UART transmitter. The VGA module independently reads the framebuffer and splitter map to render the display, with a playback counter controlling progressive row reveal.
+A tachyon particle falls through a 141-column × 70-row grid of splitters. Each splitter sends the particle (or timeline) left and right.
 
-**Modules**:
-- `Day_07_Core` — 141-bit bitmask beam simulation with block RAM splitter data
-- `Day_07_Timer` — cycle-accurate performance counter (start/stop interface)
-- `Day_07_Capture` — edge-detects row completion, writes beam snapshots to framebuffer
-- `VGA_Display` — 640×480 @ 60Hz timing generator with 25MHz pixel clock (100MHz / 4)
-- `Value_To_Bytes` — parameterised N-bit to byte serialiser for UART transmission
-- `uart_tx` — Nandland UART transmitter (parameterised baud rate)
+**Part 1**: Count how many splitters the beam hits.
+- Answer: **1672**
+- Architecture: 141-bit bitmask per row, loaded from Block RAM. Single-cycle parallel OR reduction counts active positions.
+- Includes UART transmission pipeline and VGA visualisation (640×480, green splitters, red beam, animated at 1 row/sec via dual-port framebuffer).
+- Runs in 11,201 cycles at 100 MHz.
 
-**Techniques**: 141-bit wide bitmask operations, dual-port block RAM framebuffer, state machine with edge-detected transitions, hardware multiplexing of two serialisers to shared UART TX, VGA pixel clock division, `$readmemh` for block RAM initialisation, cycle-accurate performance measurement.
+**Part 2**: Count total timelines after quantum splitting (many-worlds interpretation).
+- Answer: **231,229,866,702,355** (48-bit value, stored in 70-bit registers)
+- Architecture: Serialised FETCH → WAIT → COMPUTE pipeline, processing one column position per iteration across 141 positions per row. Each position computes a 70-bit three-input addition (left neighbour + self pass-through + right neighbour). Accumulator captures timelines exiting the grid at left edge, right edge, and bottom.
+- Key design decisions:
+  - **Serialised processing** replaced the original single-cycle parallel approach (141 × 70-bit additions) which achieved only 45 MHz — a timing violation at the Basys 3's 100 MHz clock. The serialised version achieves ~110 MHz post-routing.
+  - **Distributed RAM** (`(* ram_style = "distributed" *)`) for the count array. Yosys BRAM inference introduced a read-during-write mismatch: simulation returned the old value (correct per Verilog non-blocking semantics), but the inferred RAMB36E1 used a write mode that returned different data on hardware. Distributed registers eliminate this discrepancy.
+  - **Two-cycle BRAM read latency**: setting the address (FETCH) and reading the data (COMPUTE) are separated by a WAIT state because both the address latch and the data latch use non-blocking assignments, requiring two clock edges from address to valid data.
+  - **Sequential SUM state** with a 3-phase counter (set address → wait → accumulate) totals remaining timelines after the final row, using the same registered read pattern.
 
-## Toolchain
+**Shared infrastructure:**
+- Two-button architecture: `btnL` runs Part 1, `btnR` runs Part 2. A mux selects which result feeds the shared display pipeline. Reusable pattern for future days.
+- 7-segment display shows bottom 4 digits as a sanity check.
+- LED indicators show which part is active.
 
-The openXC7 flow uses entirely open-source tools — no Xilinx Vivado required:
-
-1. **Yosys** — synthesis (`synth_xilinx`)
-2. **nextpnr-xilinx** — place and route (with Project X-Ray chip database)
-3. **fasm2frames** — FPGA assembly to frame data
-4. **xc7frames2bit** — frame data to bitstream
-5. **openFPGALoader** — JTAG programming
-6. **Icarus Verilog** — simulation
-7. **Verilator** — lint and static analysis
-
-All tools built from source on Ubuntu 24.04 ARM64 (Parallels VM on Mac Studio M4).
-
-## Building
-
-Each project has its own Makefile:
-
-```bash
-cd projects/aoc_2025/day_07
-make              # Build bitstream
-make sim          # Run self-checking testbench
-make program      # Program FPGA via JTAG
-make clean        # Remove build artefacts
-```
-
-To regenerate hex files from puzzle input:
-
-```bash
-python3 gen_input.py input.txt
-```
+---
 
 ## Component Library
 
-Reusable modules in `lib/` are shared across projects. Key modules widened for 100MHz:
+Reusable modules for Basys 3 projects. Each module is tested and versioned.
 
-- **uart_tx.v**: Clock counter widened from 8-bit to 16-bit for `CLKS_PER_BIT` > 255
-- **debounce_switch.v**: Counter widened from 18-bit to 20-bit for 1,000,000-count limit
-- **vga_display.v**: 640×480 VGA timing with pixel clock derived from 100MHz system clock
-- **value_to_bytes.v**: Parameterised serialiser — N-bit value to sequential bytes
+### `io/debounce_switch.v`
 
-## Lessons Learned
+Debounces mechanical switch or button input.
 
-- **Register width must match parameter values.** Changing clock frequency without checking counter widths causes silent overflow. Verilator `-Wall` catches width mismatches.
-- **UART done signals can be multi-cycle.** The Nandland UART TX asserts `o_Tx_Done` for two cycles. Edge-detect before using as a state transition trigger.
-- **XDC port names must match Verilog exactly.** Mismatched names fail silently — pins left unconnected with no error.
-- **Uninitialised block RAM shows artefacts.** Use `initial` blocks to zero framebuffers before use.
-- **Decouple fast producers from slow consumers.** The framebuffer separates 0.112ms computation from 60Hz VGA display — both sides run independently.
+#### Description
 
-## Hardware
+Mechanical switches produce multiple transitions (bounce) when pressed or released. This module filters the input by requiring it to be stable for 10ms before allowing the output to change.
 
-- **Board**: Digilent Basys 3 (Rev B)
-- **FPGA**: Xilinx Artix-7 XC7A35T-1CPG236C
-- **Clock**: 100MHz on-board oscillator
-- **UART**: USB-RS232 via FTDI FT2232, 115200 baud
-- **VGA**: 640×480 @ 60Hz, 12-bit colour (4-bit per channel)
-- **Host**: Ubuntu 24.04 ARM64 in Parallels on Mac Studio M4
+#### Interface
+
+```verilog
+module Debounce_Switch (
+  input  i_Clk,
+  input  i_Switch,
+  output o_Switch
+);
+```
+
+- `i_Clk`: System clock (25 MHz)
+- `i_Switch`: Raw switch input (asynchronous)
+- `o_Switch`: Debounced switch output
+
+#### Parameters
+
+- `c_DEBOUNCE_LIMIT`: Number of clock cycles for debounce window (default: 250000 = 10ms at 25MHz)
+
+#### Behaviour
+
+- While input differs from internal state AND count < limit: increment counter
+- When counter reaches limit: update output, reset counter
+- When input matches state: reset counter to 0
+
+#### Example Usage
+
+```verilog
+wire w_Switch_Debounced;
+Debounce_Switch Debounce_Inst (
+  .i_Clk(i_Clk),
+  .i_Switch(i_Raw_Switch),
+  .o_Switch(w_Switch_Debounced)
+);
+```
+
+---
+
+### `converters/binary_to_7segment.v`
+
+Converts 4-bit binary value to 7-segment display encoding.
+
+#### Description
+
+A 7-segment display has 7 LED segments arranged to display digits. This module takes a 4-bit binary number (0-15) and outputs which segments should be illuminated to display that value as a decimal digit (0-9) or hexadecimal digit (A-F).
+
+#### Interface
+
+```verilog
+module Binary_To_7Segment (
+  input        i_Clk,
+  input  [3:0] i_Binary_Num,
+  output       o_Segment_A,
+  output       o_Segment_B,
+  output       o_Segment_C,
+  output       o_Segment_D,
+  output       o_Segment_E,
+  output       o_Segment_F,
+  output       o_Segment_G
+);
+```
+
+- `i_Clk`: System clock (synchronous to output changes)
+- `i_Binary_Num`: Input value (0-15)
+- `o_Segment_A` through `o_Segment_G`: Individual segment outputs (active-high)
+
+#### 7-Segment Layout
+
+```
+    aaa
+   f   b
+    ggg
+   e   c
+    ddd
+```
+
+#### Supported Characters
+
+**Decimal (0-9)**:
+- 0: a,b,c,d,e,f (6 segments)
+- 1: b,c (2 segments)
+- 2: a,b,d,e,g (5 segments)
+- 3: a,b,c,d,g (5 segments)
+- 4: b,c,f,g (4 segments)
+- 5: a,c,d,f,g (5 segments)
+- 6: a,c,d,e,f,g (6 segments)
+- 7: a,b,c (3 segments)
+- 8: a,b,c,d,e,f,g (7 segments)
+- 9: a,b,c,d,f,g (6 segments)
+
+**Hexadecimal (A-F)**:
+- A: a,b,c,e,f,g (6 segments)
+- B: c,d,e,f,g (5 segments)
+- C: a,d,e,f (4 segments)
+- D: b,c,d,e,g (5 segments)
+- E: a,d,e,f,g (5 segments)
+- F: a,e,f,g (4 segments)
+
+#### Implementation Notes
+
+- Outputs are **active-high** (1 = segment on)
+- The module uses registered (synchronous) outputs (changes on clock edge)
+- Go Board segments are **active-low**: invert outputs in your top-level module
+
+#### Example Usage
+
+```verilog
+wire [6:0] w_Segments;
+Binary_To_7Segment Converter_Inst (
+  .i_Clk(i_Clk),
+  .i_Binary_Num(digit_value),
+  .o_Segment_A(w_Segments[0]),
+  .o_Segment_B(w_Segments[1]),
+  .o_Segment_C(w_Segments[2]),
+  .o_Segment_D(w_Segments[3]),
+  .o_Segment_E(w_Segments[4]),
+  .o_Segment_F(w_Segments[5]),
+  .o_Segment_G(w_Segments[6])
+);
+// Invert for Go Board (active-low)
+assign o_Segments = ~w_Segments;
+```
+
+---
+
+## Adding New Components
+
+When creating a new reusable module:
+
+1. Place it in the appropriate subdirectory (`io/`, `converters/`, etc.)
+2. Include clear documentation (interface, behaviour, examples)
+3. Create a testbench (`*_tb.v`) alongside the module
+4. Test thoroughly before other projects depend on it
+5. Update this README with description and usage example
