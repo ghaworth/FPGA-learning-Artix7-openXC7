@@ -30,7 +30,7 @@ module Day_07_Part2_Core (
 	localparam SUM = 5;
 	localparam WAIT = 6;
 
-	(* ram_style = "distributed" *)
+	//(* ram_style = "distributed" *)
 	reg [69:0] count [0:140];
 	reg [9:0] ram_addr;
 	reg [3:0] words_read;
