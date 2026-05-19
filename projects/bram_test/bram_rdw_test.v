@@ -5,6 +5,7 @@
 // - One write port in a state machine always @(posedge clk) block
 // - FETCH -> WAIT -> COMPUTE pipeline
 // - Both read values used in computation (forces Yosys to serve both ports)
+// - 72-bit width forces RAMB36E1 in SDP mode (same as original design's 70 bits)
 //
 // Computation:
 //   1. Initialise: mem[i] = i for i = 0..255
@@ -16,6 +17,7 @@
 //   mem[255] = 255    (unchanged)
 //
 // Expected sum = sum(2i+1, i=0..254) + 255 = 65025 + 255 = 65280
+// Expected hex on 7-seg: FF00
 //
 // To test: synthesise with and without (* ram_style = "distributed" *)
 // If both give 65280, BRAM inference is correct.
@@ -28,16 +30,17 @@ module bram_rdw_test (
     output reg done = 0
 );
 
-    // ----- Memory: 256 entries x 16 bits -----
+    // ----- Memory: 256 entries x 72 bits -----
+    // 72-bit width forces RAMB36E1 SDP mode (same primitive as original 70-bit design)
     // Uncomment the next line to force distributed RAM (workaround):
     // (* ram_style = "distributed" *)
-    reg [15:0] mem [0:255];
+    reg [71:0] mem [0:140];
 
     // ----- Two read ports in separate always blocks (matches original) -----
     reg [7:0] rd_addr_a;
     reg [7:0] rd_addr_b;
-    reg [15:0] rd_data_a;
-    reg [15:0] rd_data_b;
+    reg [71:0] rd_data_a;
+    reg [71:0] rd_data_b;
 
     always @(posedge clk) begin
         rd_data_a <= mem[rd_addr_a];
@@ -58,8 +61,8 @@ module bram_rdw_test (
     localparam SUM_R   = 3'd7;
 
     reg [2:0] state = IDLE;
-    reg [8:0] pos;  // 9 bits to hold values up to 255 and detect overflow
-    reg [15:0] prev;
+    reg [8:0] pos;
+    reg [71:0] prev;
     reg [31:0] accumulator;
 
     always @(posedge clk) begin
@@ -75,8 +78,8 @@ module bram_rdw_test (
             case (state)
                 // Initialise memory: mem[i] = i
                 INIT: begin
-                    mem[pos[7:0]] <= {8'd0, pos[7:0]};
-                    if (pos == 255) begin
+                    mem[pos[7:0]] <= {64'd0, pos[7:0]};
+                    if (pos == 140) begin
                         pos <= 0;
                         state <= FETCH;
                     end else begin
@@ -100,7 +103,7 @@ module bram_rdw_test (
                 COMPUTE: begin
                     prev <= rd_data_a;
                     mem[pos[7:0]] <= rd_data_a + rd_data_b;
-                    if (pos == 254) begin
+                    if (pos == 139) begin
                         pos <= 0;
                         state <= SUM_F;
                     end else begin
@@ -120,9 +123,9 @@ module bram_rdw_test (
                 end
 
                 SUM_R: begin
-                    accumulator <= accumulator + {16'd0, rd_data_a};
-                    if (pos == 255) begin
-                        result <= accumulator + {16'd0, rd_data_a};
+                    accumulator <= accumulator + rd_data_a[31:0];
+                    if (pos == 140) begin
+                        result <= accumulator + rd_data_a[31:0];
                         done <= 1;
                         state <= IDLE;
                     end else begin
