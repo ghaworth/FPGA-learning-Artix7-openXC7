@@ -6,3 +6,4 @@
 *.vcd
 *.swp
 build.log
+projects/aoc_2025/*/input.txt
